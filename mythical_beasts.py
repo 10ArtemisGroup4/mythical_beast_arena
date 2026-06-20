@@ -1,195 +1,180 @@
-
 from abc import ABC, abstractmethod
 import random
 
 
 class MythicalBeast(ABC):
-    """Abstract base class - the magical contract every beast must obey."""
+    """The Abstract Base Class showcasing Abstraction, Encapsulation, and Elemental rules."""
 
-    def __init__(self, name, max_health, max_mana, base_power):
-        self._name = name
-        self.__max_health = max_health
-        self.__health = max_health          # private -> encapsulated
-        self.__max_mana = max_mana
-        self.__mana = max_mana              # private -> encapsulated
-        self._base_power = base_power
-        self._level = 1
+    def __init__(self, name: str, health: int, attack_power: int, speed: int, beast_type: str, element: str):
+        self.name = name
+        self.beast_type = beast_type
+        self.element = element
 
-    # ---------------- Encapsulation: guarded access only ----------------
-    @property
-    def name(self):
-        return self._name
+        # Encapsulation: Protected combat attributes
+        self._max_health = health
+        self._health = health
+        self._attack_power = attack_power
+        self._speed = speed
+        self._ultimate_gauge = 0
 
     @property
-    def max_health(self):
-        return self.__max_health
+    def health(self) -> int:
+        return max(0, self._health)
 
     @property
-    def health(self):
-        return self.__health
-
-    @health.setter
-    def health(self, value):
-        # No matter who calls this, health can never leave [0, max_health]
-        self.__health = max(0, min(value, self.__max_health))
+    def max_health(self) -> int:
+        return self._max_health
 
     @property
-    def mana(self):
-        return self.__mana
+    def attack_power(self) -> int:
+        return self._attack_power
 
-    @mana.setter
-    def mana(self, value):
-        self.__mana = max(0, min(value, self.__max_mana))
+    @property
+    def speed(self) -> int:
+        return self._speed
 
-    def is_alive(self):
-        return self.__health > 0
+    @property
+    def ultimate_gauge(self) -> int:
+        return min(100, self._ultimate_gauge)
 
-    def take_damage(self, amount):
-        self.health = self.health - amount   # routed through the setter
-        return amount
+    def recover_health(self, amount: int):
+        """Allows safely modifying health states between ladder matches."""
+        self._health = min(self._max_health, self._health + amount)
 
-    def heal(self, amount):
-        before = self.health
-        self.health = self.health + amount
-        return self.health - before
+    def scale_difficulty(self, multiplier: float):
+        """Scales up enemy attributes for the endless survival mode progression."""
+        self._max_health = int(self._max_health * multiplier)
+        self._health = self._max_health
+        self._attack_power = int(self._attack_power * multiplier)
 
-    def spend_mana(self, amount):
-        if self.__mana >= amount:
-            self.mana = self.mana - amount
-            return True
-        return False
+    def calculate_elemental_multiplier(self, opponent: 'MythicalBeast') -> float:
+        """Calculates strict rock-paper-scissors type balancing logic."""
+        rules = {
+            "Fire": "Water",  # Fire is weak against Water
+            "Water": "Air",  # Water is weak against Air
+            "Air": "Fire"  # Air is weak against Fire
+        }
+        if rules.get(self.element) == opponent.element:
+            return 0.75  # Disadvantage
+        if rules.get(opponent.element) == self.element:
+            return 1.5  # Advantage
+        return 1.0  # Neutral
 
-    def level_up(self):
-        self._level += 1
-        self._base_power += 2
-        self.heal(10)
+    def take_damage(self, amount: int) -> str:
+        """Deducts life points and charges the passive ultimate gauge asset."""
+        actual_damage = max(1, amount)
+        self._health -= actual_damage
+        if self._health < 0:
+            self._health = 0
 
-    # ------------------------- Abstraction -------------------------
+        # Passive Ultimate Gauge: Charges based on damage sustained
+        charge_gained = int(actual_damage * 0.8)
+        self._ultimate_gauge = min(100, self._ultimate_gauge + charge_gained)
+
+        return f"{self.name} takes {actual_damage} damage! (Ultimate Gauge +{charge_gained}%)"
+
+    def basic_attack(self, opponent: 'MythicalBeast') -> str:
+        """Shared attacking mechanics augmented by custom type values."""
+        base = random.randint(self._attack_power - 3, self._attack_power + 3)
+        mult = self.calculate_elemental_multiplier(opponent)
+        damage = int(base * mult)
+
+        log = f"[ATTACK] {self.name} ({self.element}) strikes {opponent.name} ({opponent.element}).\n"
+        if mult > 1.0:
+            log += "[EFFECT] Structural advantage! Exploiting weakness.\n"
+        elif mult < 1.0:
+            log += "[EFFECT] Elemental resistance! Attack was suppressed.\n"
+
+        log += opponent.take_damage(damage)
+        return log
+
     @abstractmethod
-    def attack(self, target):
-        """Every beast must define its own basic attack."""
-        raise NotImplementedError
+    def execute_special_ability(self, opponent: 'MythicalBeast') -> str:
+        """Abstraction Pillar: Forced subclass signature implementation."""
+        pass
 
     @abstractmethod
-    def special_ability(self, target=None):
-        """Every beast must define its own unique special move."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def battle_cry(self):
-        """Every beast must define its own roar/cry."""
-        raise NotImplementedError
-
-    # ------------------------- Shared utility -------------------------
-    def status_bar(self, width=20):
-        ratio = self.health / self.max_health if self.max_health else 0
-        filled = int(width * ratio)
-        bar = "#" * filled + "." * (width - filled)
-        return f"{self._name:<10} [{bar}] {self.health:>3}/{self.max_health} HP | {self.mana:>3} MP"
-
-    def __str__(self):
-        return f"{self._name} (Lv.{self._level})"
+    def execute_ultimate_ability(self, opponent: 'MythicalBeast') -> str:
+        """Abstraction Pillar: Charged ultimate logic requirements."""
+        pass
 
 
+# Inheritance Pillar: Distinct specialized child classes
 class Dragon(MythicalBeast):
-    """A fire-breathing brute that builds up rage with every claw swipe."""
+    """Fire element asset targeting offensive output metrics."""
 
-    def __init__(self, name="Drakon"):
-        super().__init__(name, max_health=120, max_mana=40, base_power=18)
-        self.__fire_charge = 0  # private to Dragon only
+    def __init__(self, name: str):
+        super().__init__(name, health=140, attack_power=22, speed=12, beast_type="Dragon", element="Fire")
 
-    def attack(self, target):
-        dmg = self._base_power + random.randint(-3, 5)
-        self.__fire_charge += 1
-        target.take_damage(dmg)
-        return f"[Dragon] {self.name} claws {target.name} for {dmg} damage!"
+    def execute_special_ability(self, opponent: 'MythicalBeast') -> str:
+        mult = self.calculate_elemental_multiplier(opponent)
+        damage = int((self._attack_power * 1.7) * mult)
+        log = f"[SPECIAL] {self.name} unleashes a devastating magma burst!\n"
+        log += opponent.take_damage(damage)
+        return log
 
-    def special_ability(self, target=None):
-        if target and self.spend_mana(15):
-            dmg = self._base_power * 2 + self.__fire_charge
-            target.take_damage(dmg)
-            self.__fire_charge = 0
-            return f"[Dragon] {self.name} unleashes an INFERNO BREATH on {target.name} for {dmg} damage!"
-        return f"{self.name} doesn't have enough mana to breathe fire!"
-
-    def battle_cry(self):
-        return f"{self.name} roars, scorching the sky with flame!"
+    def execute_ultimate_ability(self, opponent: 'MythicalBeast') -> str:
+        self._ultimate_gauge = 0
+        mult = self.calculate_elemental_multiplier(opponent)
+        damage = int((self._attack_power * 2.8) * mult)
+        log = f"[ULTIMATE] {self.name} activates CATACLYSMIC SUPERNOVA, melting the landscape!\n"
+        log += opponent.take_damage(damage)
+        return log
 
 
 class Phoenix(MythicalBeast):
-    """A graceful flier that can cheat death exactly once per battle."""
+    """Air element asset built around restoration speed loops."""
 
-    def __init__(self, name="Ashera"):
-        super().__init__(name, max_health=90, max_mana=60, base_power=14)
-        self.__has_revived = False
+    def __init__(self, name: str):
+        super().__init__(name, health=100, attack_power=15, speed=25, beast_type="Phoenix", element="Air")
 
-    def attack(self, target):
-        dmg = self._base_power + random.randint(0, 4)
-        target.take_damage(dmg)
-        return f"[Phoenix] {self.name} dives and slashes {target.name} for {dmg} damage!"
+    def execute_special_ability(self, opponent: 'MythicalBeast') -> str:
+        heal_amount = 30
+        self.recover_health(heal_amount)
+        mult = self.calculate_elemental_multiplier(opponent)
+        damage = int((self._attack_power * 1.1) * mult)
 
-    def special_ability(self, target=None):
-        if self.spend_mana(20):
-            healed = self.heal(25)
-            return f"[Phoenix] {self.name} bathes in healing flame, recovering {healed} HP!"
-        return f"{self.name} is out of mana to self-heal!"
+        log = f"[SPECIAL] {self.name} flashes with blinding solar heat!\n"
+        log += f"[HEAL] {self.name} recovers {heal_amount} health points.\n"
+        log += opponent.take_damage(damage)
+        return log
 
-    def take_damage(self, amount):
-        # Overridden on purpose: same call signature, very different behavior
-        super().take_damage(amount)
-        if not self.is_alive() and not self.__has_revived:
-            self.__has_revived = True
-            self.health = self.max_health // 2
-            print(f"  *** {self.name} bursts into flame and is REBORN FROM ASHES with {self.health} HP! ***")
-        return amount
+    def execute_ultimate_ability(self, opponent: 'MythicalBeast') -> str:
+        self._ultimate_gauge = 0
+        heal_amount = self._max_health - self._health
+        self.recover_health(heal_amount)
+        mult = self.calculate_elemental_multiplier(opponent)
+        damage = int((self._attack_power * 1.5) * mult)
 
-    def battle_cry(self):
-        return f"{self.name} cries out, eternal and undying!"
+        log = f"[ULTIMATE] {self.name} triggers NIRVANA REBIRTH, fully restoring structural health and creating a shockwave!\n"
+        log += f"[HEAL] {self.name} completely refreshed health reserves.\n"
+        log += opponent.take_damage(damage)
+        return log
 
 
 class Kraken(MythicalBeast):
-    """A heavy-hitting sea titan that can drain an opponent's mana."""
+    """Water element asset scaled for high vitality profiles."""
 
-    def __init__(self, name="Nautilon"):
-        super().__init__(name, max_health=150, max_mana=30, base_power=20)
+    def __init__(self, name: str):
+        super().__init__(name, health=190, attack_power=14, speed=8, beast_type="Kraken", element="Water")
 
-    def attack(self, target):
-        dmg = self._base_power + random.randint(-5, 2)
-        target.take_damage(dmg)
-        return f"[Kraken] {self.name} smashes {target.name} with a tentacle for {dmg} damage!"
+    def execute_special_ability(self, opponent: 'MythicalBeast') -> str:
+        mult = self.calculate_elemental_multiplier(opponent)
+        damage = int((self._attack_power + 8) * mult)
+        opponent._attack_power = max(5, opponent._attack_power - 4)
 
-    def special_ability(self, target=None):
-        if target and self.spend_mana(18):
-            dmg = int(self._base_power * 1.5)
-            target.take_damage(dmg)
-            target.mana = target.mana - 10   # still goes through target's own setter
-            return (f"[Kraken] {self.name} summons a MAELSTROM, dealing {dmg} damage "
-                    f"and draining {target.name}'s mana!")
-        return f"{self.name} doesn't have enough mana for a maelstrom!"
+        log = f"[SPECIAL] {self.name} drags the opponent into an icy whirlpool squeeze!\n"
+        log += f"[DEBUFF] {opponent.name}'s attack power fell by 4 points.\n"
+        log += opponent.take_damage(damage)
+        return log
 
-    def battle_cry(self):
-        return f"{self.name} bellows from the deep, churning the seas!"
+    def execute_ultimate_ability(self, opponent: 'MythicalBeast') -> str:
+        self._ultimate_gauge = 0
+        mult = self.calculate_elemental_multiplier(opponent)
+        damage = int((self._attack_power * 2.2) * mult)
+        opponent._speed = max(2, opponent._speed - 10)
 
-
-class Griffin(MythicalBeast):
-    """A swift aerial striker with a chance to land critical hits."""
-
-    def __init__(self, name="Skytalon"):
-        super().__init__(name, max_health=100, max_mana=45, base_power=16)
-
-    def attack(self, target):
-        crit = random.random() < 0.25
-        dmg = self._base_power * (2 if crit else 1) + random.randint(-2, 3)
-        target.take_damage(dmg)
-        tag = " (CRITICAL HIT!)" if crit else ""
-        return f"[Griffin] {self.name} dive-bombs {target.name} for {dmg} damage!{tag}"
-
-    def special_ability(self, target=None):
-        if self.spend_mana(12):
-            self._base_power += 3
-            healed = self.heal(8)
-            return f"[Griffin] {self.name} rides a mountain gale - power up, and heals {healed} HP!"
-        return f"{self.name} lacks the mana to summon wind!"
-
-    def battle_cry(self):
-        return f"{self.name} shrieks a piercing battle cry across the mountains!"
+        log = f"[ULTIMATE] {self.name} invokes TIDAL DELUGE, paralyzing the target in heavy currents!\n"
+        log += f"[DEBUFF] {opponent.name}'s mechanical speed was crippled.\n"
+        log += opponent.take_damage(damage)
+        return log

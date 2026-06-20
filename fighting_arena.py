@@ -1,181 +1,272 @@
-
+import tkinter as tk
+from tkinter import messagebox, ttk
 import random
-from mythical_beasts import Dragon, Phoenix, Kraken, Griffin
 
-# --------------------------
-# COLOR SETUP
-# --------------------------
-class Colors:
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    RED = "\033[91m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    BLUE = "\033[94m"
-    MAGENTA = "\033[95m"
-    CYAN = "\033[96m"
-    WHITE = "\033[97m"
-    GRAY = "\033[90m"
-
-BESTIARY = [Dragon, Phoenix, Kraken, Griffin]
-
-RANK_TITLES = {
-    0: "Arena Sweepings",
-    1: "Bronze Tamer",
-    2: "Silver Tamer",
-    3: "Mystic Champion",
-}
+from mythical_beasts import Dragon, Phoenix, Kraken
 
 
-def banner():
-    print(f"""{Colors.CYAN}
-   _________________________________________
-  /                                         \\
- |        T H E   M Y S T I C   A R E N A    |
-  \\_________________________________________/
-        where legends are forged in battle
-{Colors.RESET}""")
+class ArenaApp:
+    """The Driver Application managing GUI elements, turn updates, and the Endless Mode architecture."""
 
+    def __init__(self, window_root: tk.Tk):
+        self.root = window_root
+        self.root.title("Mythical Beasts: Endless Survival Arena")
+        self.root.geometry("750x680")
 
-def meet_the_bestiary():
-    print(f"{Colors.YELLOW}Before you enter the arena, the keeper introduces the beasts you may bond with:{Colors.RESET}\n")
-    dummy = Griffin("Echo")  # just here so battle_cry() has nothing to do with combat
-    for cls in BESTIARY:
-        preview = cls()
-        print(f"  {Colors.MAGENTA}* {cls.__name__:<8}{Colors.RESET} -> \"{preview.battle_cry()}\"")
-    print()
+        # Color profile configurations
+        self.bg_main = "#121214"
+        self.bg_card = "#1a1a24"
+        self.fg_light = "#e1e1e6"
+        self.accent_blue = "#04d361"
+        self.accent_red = "#f75151"
+        self.accent_purp = "#bd93f9"
 
+        self.root.configure(bg=self.bg_main)
 
-def choose_beast():
-    print(f"{Colors.BOLD}Which creature calls to you?{Colors.RESET}")
-    for i, cls in enumerate(BESTIARY, start=1):
-        print(f"  {Colors.CYAN}{i}. {cls.__name__}{Colors.RESET}")
-    while True:
-        choice = input("> ").strip()
-        if choice.isdigit() and 1 <= int(choice) <= len(BESTIARY):
-            cls = BESTIARY[int(choice) - 1]
-            break
-        print(f"{Colors.RED}The keeper doesn't recognize that number. Try again.{Colors.RESET}")
+        self.player_beast = None
+        self.cpu_beast = None
+        self.round_count = 0
+        self.survival_score = 0
 
-    nickname = input(f"\nName your {cls.__name__} (leave blank to keep its true name): ").strip()
-    beast = cls(nickname) if nickname else cls()
-    print(f"\n{Colors.GREEN}{beast.name} the {cls.__name__} bonds with you. {beast.battle_cry()}{Colors.RESET}\n")
-    return beast
+        self.player_choices = {
+            "Inferno Dragon": Dragon,
+            "Solar Phoenix": Phoenix,
+            "Abyssal Kraken": Kraken
+        }
 
+        self.build_selection_ui()
 
-def spawn_rival(round_number):
-    """Each round summons a tougher wild rival."""
-    cls = random.choice(BESTIARY)
-    rival = cls(name=f"Wild {cls.__name__}")
-    for _ in range(round_number - 1):
-        rival.level_up()
-    return rival
+    def build_selection_ui(self):
+        """Initial choice menu presentation."""
+        self.clear_screen()
+        self.round_count = 0
+        self.survival_score = 0
 
+        title = tk.Label(self.root, text="ENDLESS ARENA LADDER", font=("Courier New", 22, "bold"), fg="#ffb86c",
+                         bg=self.bg_main)
+        title.pack(pady=40)
 
-def show_status(player, rival):
-    print()
-    # Color player HP/MP
-    player_hp_color = Colors.GREEN if player.health > player.max_health * 0.5 else Colors.YELLOW if player.health > player.max_health * 0.2 else Colors.RED
-    player_mp_color = Colors.BLUE if player.mana > player.max_mana * 0.5 else Colors.CYAN if player.mana > player.max_mana * 0.2 else Colors.GRAY
-    print(f"{player.name} | HP: {player_hp_color}{player.health}/{player.max_health}{Colors.RESET} | MP: {player_mp_color}{player.mana}/{player.max_mana}{Colors.RESET} | Lv.{player._level}")
+        instruction = tk.Label(self.root, text="Select your core fighter archetype. Survive as many waves as possible:",
+                               font=("Arial", 11), fg=self.fg_light, bg=self.bg_main)
+        instruction.pack(pady=10)
 
-    # Color rival HP/MP
-    rival_hp_color = Colors.GREEN if rival.health > rival.max_health * 0.5 else Colors.YELLOW if rival.health > rival.max_health * 0.2 else Colors.RED
-    rival_mp_color = Colors.BLUE if rival.mana > rival.max_mana * 0.5 else Colors.CYAN if rival.mana > rival.max_mana * 0.2 else Colors.GRAY
-    print(f"{rival.name} | HP: {rival_hp_color}{rival.health}/{rival.max_health}{Colors.RESET} | MP: {rival_mp_color}{rival.mana}/{rival.max_mana}{Colors.RESET} | Lv.{rival._level}")
+        btn_frame = tk.Frame(self.root, bg=self.bg_main)
+        btn_frame.pack(pady=30)
 
+        for name, beast_class in self.player_choices.items():
+            btn = tk.Button(
+                btn_frame,
+                text=name,
+                font=("Arial", 11, "bold"),
+                width=18,
+                height=2,
+                bg=self.bg_card,
+                fg="#8ff0a4",
+                command=lambda b_type=beast_class, b_name=name: self.start_ladder_mode(b_type, b_name)
+            )
+            btn.pack(side=tk.LEFT, padx=15)
 
-def player_turn(player, rival):
-    print(f"\n{Colors.BOLD}Choose your action:{Colors.RESET}")
-    print(f"{Colors.CYAN}1. Attack{Colors.RESET}   {Colors.MAGENTA}2. Special Ability{Colors.RESET}   {Colors.YELLOW}3. Check status{Colors.RESET}")
-    while True:
-        choice = input("> ").strip()
-        if choice == "1":
-            print(f"{Colors.WHITE}{player.attack(rival)}{Colors.RESET}")
-            return
-        elif choice == "2":
-            print(f"{Colors.MAGENTA}{player.special_ability(rival)}{Colors.RESET}")
-            return
-        elif choice == "3":
-            show_status(player, rival)
+    def start_ladder_mode(self, chosen_class, name: str):
+        """Instantiates player baseline selection object records."""
+        self.player_beast = chosen_class(name)
+        self.spawn_next_enemy()
+        self.build_arena_ui()
+
+    def spawn_next_enemy(self):
+        """Generates random dynamic targets scaled against historical win metrics."""
+        self.round_count = 0
+        self.survival_score += 1
+
+        cpu_raw_name, cpu_class = random.choice(list(self.player_choices.items()))
+        self.cpu_beast = cpu_class(f"Rival {cpu_raw_name}")
+
+        # Difficulty Multiplier: Enemies get 20% stronger per wave passed
+        if self.survival_score > 1:
+            scale = 1.0 + (self.survival_score - 1) * 0.20
+            self.cpu_beast.scale_difficulty(scale)
+
+    def build_arena_ui(self):
+        """Draws live active dashboards tracking dynamic property metrics."""
+        self.clear_screen()
+
+        # Upper dashboard monitors
+        status_frame = tk.Frame(self.root, bg=self.bg_main)
+        status_frame.pack(fill=tk.X, pady=10, padx=30)
+
+        self.score_lbl = tk.Label(status_frame, text=f"WAVE: {self.survival_score}", font=("Courier New", 12, "bold"),
+                                  fg="#ff79c6", bg=self.bg_main)
+        self.score_lbl.pack(side=tk.LEFT)
+
+        self.turn_lbl = tk.Label(status_frame, text="ROUND 1", font=("Courier New", 12, "bold"), fg="#f1fa8c",
+                                 bg=self.bg_main)
+        self.turn_lbl.pack(side=tk.RIGHT)
+
+        display_frame = tk.Frame(self.root, bg=self.bg_main)
+        display_frame.pack(fill=tk.X, padx=30, pady=5)
+
+        # Player Status Card Design
+        p_panel = tk.Frame(display_frame, bg=self.bg_card, bd=2, relief=tk.RIDGE, padx=15, pady=15)
+        p_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10)
+
+        self.p_name_lbl = tk.Label(p_panel, text="", font=("Arial", 12, "bold"), fg=self.accent_blue, bg=self.bg_card)
+        self.p_name_lbl.pack(anchor=tk.W)
+        self.p_health = ttk.Progressbar(p_panel, orient=tk.HORIZONTAL, length=180, mode='determinate')
+        self.p_health.pack(fill=tk.X, pady=4)
+
+        # Visual metrics layout tracking passive charges
+        tk.Label(p_panel, text="Ultimate Energy:", font=("Arial", 9), fg="#aaa", bg=self.bg_card).pack(anchor=tk.W)
+        self.p_ult_bar = ttk.Progressbar(p_panel, orient=tk.HORIZONTAL, length=180, mode='determinate')
+        self.p_ult_bar.pack(fill=tk.X, pady=2)
+
+        self.p_stat_lbl = tk.Label(p_panel, text="", font=("Courier New", 9), fg=self.fg_light, bg=self.bg_card,
+                                   justify=tk.LEFT)
+        self.p_stat_lbl.pack(anchor=tk.W, pady=4)
+
+        # Enemy Status Card Design
+        c_panel = tk.Frame(display_frame, bg=self.bg_card, bd=2, relief=tk.RIDGE, padx=15, pady=15)
+        c_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10)
+
+        self.c_name_lbl = tk.Label(c_panel, text="", font=("Arial", 12, "bold"), fg=self.accent_red, bg=self.bg_card)
+        self.c_name_lbl.pack(anchor=tk.W)
+        self.c_health = ttk.Progressbar(c_panel, orient=tk.HORIZONTAL, length=180, mode='determinate')
+        self.c_health.pack(fill=tk.X, pady=4)
+
+        tk.Label(c_panel, text="Ultimate Energy:", font=("Arial", 9), fg="#aaa", bg=self.bg_card).pack(anchor=tk.W)
+        self.c_ult_bar = ttk.Progressbar(c_panel, orient=tk.HORIZONTAL, length=180, mode='determinate')
+        self.c_ult_bar.pack(fill=tk.X, pady=2)
+
+        self.c_stat_lbl = tk.Label(c_panel, text="", font=("Courier New", 9), fg=self.fg_light, bg=self.bg_card,
+                                   justify=tk.LEFT)
+        self.c_stat_lbl.pack(anchor=tk.W, pady=4)
+
+        # Central Operational Text Window Frame
+        self.log_box = tk.Text(self.root, height=14, width=85, font=("Courier New", 9), bg="#282a36", fg="#f8f8f2",
+                               state=tk.DISABLED)
+        self.log_box.pack(pady=10)
+
+        # Controller Commands Row Interface
+        self.controls_frame = tk.Frame(self.root, bg=self.bg_main)
+        self.controls_frame.pack(pady=10)
+
+        self.btn_strike = tk.Button(self.controls_frame, text="Basic Strike", width=15, font=("Arial", 10, "bold"),
+                                    bg="#44475a", fg=self.fg_light, command=self.do_player_strike)
+        self.btn_strike.grid(row=0, column=0, padx=10)
+
+        self.btn_special = tk.Button(self.controls_frame, text="Special Power", width=15, font=("Arial", 10, "bold"),
+                                     bg="#6272a4", fg=self.fg_light, command=self.do_player_special)
+        self.btn_special.grid(row=0, column=1, padx=10)
+
+        self.btn_ultimate = tk.Button(self.controls_frame, text="ULTIMATE", width=15, font=("Arial", 10, "bold"),
+                                      bg=self.accent_purp, fg=self.fg_light, command=self.do_player_ultimate)
+        self.btn_ultimate.grid(row=0, column=2, padx=10)
+
+        self.advance_turn_count()
+        self.update_displays()
+        self.append_log(f"[SYSTEM] Wave {self.survival_score} deployed. Elemental advantages active.")
+
+    def advance_turn_count(self):
+        """Steps forward through the tracking registers."""
+        self.round_count += 1
+        self.turn_lbl.config(text=f"ROUND {self.round_count}")
+
+    def update_displays(self):
+        """Calculates dynamic widths and properties cleanly."""
+        self.p_health['value'] = (self.player_beast.health / self.player_beast.max_health) * 100
+        self.c_health['value'] = (self.cpu_beast.health / self.cpu_beast.max_health) * 100
+
+        self.p_ult_bar['value'] = self.player_beast.ultimate_gauge
+        self.c_ult_bar['value'] = self.cpu_beast.ultimate_gauge
+
+        self.p_name_lbl.config(text=f"{self.player_beast.name} ({self.player_beast.element})")
+        self.c_name_lbl.config(text=f"{self.cpu_beast.name} ({self.cpu_beast.element})")
+
+        p_metrics = f"HP: {self.player_beast.health}/{self.player_beast.max_health}\nATK: {self.player_beast.attack_power}  SPD: {self.player_beast.speed}\nULTIMATE: {self.player_beast.ultimate_gauge}%"
+        self.p_stat_lbl.config(text=p_metrics)
+
+        c_metrics = f"HP: {self.cpu_beast.health}/{self.cpu_beast.max_health}\nATK: {self.cpu_beast.attack_power}  SPD: {self.cpu_beast.speed}\nULTIMATE: {self.cpu_beast.ultimate_gauge}%"
+        self.c_stat_lbl.config(text=c_metrics)
+
+        # Ultimate action locking parameters based on passive metrics
+        if self.player_beast.ultimate_gauge >= 100:
+            self.btn_ultimate.config(bg="#ff5555", fg="#ffffff", state=tk.NORMAL)
         else:
-            print(f"{Colors.RED}Pick 1, 2, or 3.{Colors.RESET}")
+            self.btn_ultimate.config(bg="#2b2b36", fg="#666677", state=tk.DISABLED)
 
+    def append_log(self, text: str):
+        self.log_box.config(state=tk.NORMAL)
+        self.log_box.insert(tk.END, f"[W{self.survival_score} R{self.round_count}] {text}\n\n")
+        self.log_box.see(tk.END)
+        self.log_box.config(state=tk.DISABLED)
 
-def rival_turn(rival, player):
-    if random.random() < 0.35:
-        print(f"{Colors.RED}{rival.special_ability(player)}{Colors.RESET}")
-    else:
-        print(f"{Colors.RED}{rival.attack(player)}{Colors.RESET}")
+    def do_player_strike(self):
+        self.append_log(self.player_beast.basic_attack(self.cpu_beast))
+        self.check_or_continue_battle()
 
+    def do_player_special(self):
+        self.append_log(self.player_beast.execute_special_ability(self.cpu_beast))
+        self.check_or_continue_battle()
 
-def run_battle(player, rival, round_number):
-    print(f"\n{Colors.BOLD}{'=' * 50}{Colors.RESET}")
-    print(f"{Colors.YELLOW}ROUND {round_number}: {player.name} vs {rival.name}{Colors.RESET}")
-    print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
-    print(f"{Colors.RED}{rival.battle_cry()}{Colors.RESET}")
+    def do_player_ultimate(self):
+        self.append_log(self.player_beast.execute_ultimate_ability(self.cpu_beast))
+        self.check_or_continue_battle()
 
-    while player.is_alive() and rival.is_alive():
-        show_status(player, rival)
-        player_turn(player, rival)
-        if not rival.is_alive():
-            break
-        rival_turn(rival, player)
+    def check_or_continue_battle(self):
+        """Coordinates endless survival ladder progression tracking loops."""
+        self.update_displays()
 
-    if player.is_alive():
-        print(f"\n{Colors.GREEN}{rival.name} has been defeated! {player.name} stands victorious!{Colors.RESET}\n")
-        return True
-    else:
-        print(f"\n{Colors.RED}{player.name} has fallen. The arena falls silent...{Colors.RESET}\n")
-        return False
+        if self.cpu_beast.health <= 0:
+            # Reward player by regenerating 35% health before the next battle layer loads
+            heal_bonus = int(self.player_beast.max_health * 0.35)
+            self.player_beast.recover_health(heal_bonus)
+            messagebox.showinfo("WAVE CLEARED",
+                                f"Defeated the target. Survival Bonus: Restored {heal_bonus} health. Preparing Wave {self.survival_score + 1}!")
+            self.spawn_next_enemy()
+            self.build_arena_ui()
+            return
 
+        self.toggle_buttons(state=tk.DISABLED)
+        self.root.after(1000, self.execute_cpu_turn)
 
-def between_rounds_event(player):
-    """A little flavor and a small strategic choice between fights."""
-    events = [
-        ("A traveling healer offers to mend your wounds.", "heal"),
-        ("A glowing spring restores your inner energy.", "mana"),
-        ("The arena keeper offers no aid this time - press on.", "none"),
-    ]
-    text, kind = random.choice(events)
-    print(f"\n{Colors.BLUE}--- {text} ---{Colors.RESET}")
-    if kind == "heal":
-        healed = player.heal(20)
-        print(f"{Colors.GREEN}{player.name} recovers {healed} HP.{Colors.RESET}")
-    elif kind == "mana":
-        player.mana = player.mana + 15
-        print(f"{Colors.CYAN}{player.name}'s mana is restored.{Colors.RESET}")
-    else:
-        print(f"{Colors.GRAY}Nothing changes, but you press forward anyway.{Colors.RESET}")
-    player.level_up()
-    print(f"{Colors.YELLOW}{player.name} grows stronger from the experience (now Lv.{player._level}).{Colors.RESET}\n")
+    def execute_cpu_turn(self):
+        if self.player_beast.health <= 0:
+            return
 
+        # CPU priority calculation layer checking state markers
+        if self.cpu_beast.ultimate_gauge >= 100:
+            log = self.cpu_beast.execute_ultimate_ability(self.player_beast)
+        elif random.random() < 0.40:
+            log = self.cpu_beast.execute_special_ability(self.player_beast)
+        else:
+            log = self.cpu_beast.basic_attack(self.player_beast)
 
-def final_rank(wins):
-    title = RANK_TITLES.get(wins, "Legend of the Arena")
-    print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
-    print(f"{Colors.MAGENTA}TOURNAMENT COMPLETE - Wins: {wins}/3{Colors.RESET}")
-    print(f"{Colors.CYAN}Your title: {title}{Colors.RESET}")
-    print(f"{Colors.BOLD}{'=' * 50}{Colors.RESET}")
+        self.append_log(f"[ENEMY TURN]\n{log}")
 
+        if self.player_beast.health <= 0:
+            self.update_displays()
+            messagebox.showerror("COMBAT TERMINATED",
+                                 f"Your champion collapsed. Waves Survived: {self.survival_score - 1}")
+            self.build_selection_ui()
+            return
 
-def main():
-    banner()
-    meet_the_bestiary()
-    player = choose_beast()
+        self.advance_turn_count()
+        self.update_displays()
+        self.toggle_buttons(state=tk.NORMAL)
 
-    wins = 0
-    for round_number in range(1, 4):
-        rival = spawn_rival(round_number)
-        won = run_battle(player, rival, round_number)
-        if not won:
-            break
-        wins += 1
-        if round_number < 3 and player.is_alive():
-            between_rounds_event(player)
+    def toggle_buttons(self, state):
+        self.btn_strike.config(state=state)
+        self.btn_special.config(state=state)
+        if self.player_beast.ultimate_gauge < 100 and state == tk.NORMAL:
+            pass
+        else:
+            self.btn_ultimate.config(state=state)
 
-    final_rank(wins)
+    def clear_screen(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = ArenaApp(root)
+    root.mainloop()
+
